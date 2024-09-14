@@ -67,6 +67,10 @@ impl<const N: usize, OP: OutputPin> ShifterValue<N, OP> {
         }
     }
 
+    pub fn value<'a>(&self) -> &'a mut u8 {
+        unsafe { self.inner.as_mut().unwrap() }
+    }
+
     pub fn update_shifters(&self) {
         unsafe {
             (*self.parent).update_shifters();
@@ -94,6 +98,10 @@ impl<const N: usize, OP: OutputPin> ShifterValueRange<N, OP> {
             let ptr = &mut *self.inner;
             ptr[index] = value;
         }
+    }
+
+    pub fn value<'a>(&self) -> &'a mut [u8] {
+        unsafe { self.inner.as_mut().unwrap() }
     }
 
     pub fn update_shifters(&self) {
