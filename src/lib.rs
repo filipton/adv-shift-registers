@@ -1,7 +1,6 @@
 #![no_std]
 
 use core::ops::Range;
-
 use embedded_hal::digital::{OutputPin, PinState};
 
 pub struct AdvancedShiftRegister<const N: usize, OP: OutputPin> {

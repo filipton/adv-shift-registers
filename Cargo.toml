@@ -1,7 +1,11 @@
 [package]
 name = "adv-shift-registers"
+authors = ["filipton <filipton12@gmail.com>"]
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Advanced shift registers control (for multiple chained shift-registers)"
+repository = "https://github.com/filipton/adv-shift-registers"
 
 [lib]
 
