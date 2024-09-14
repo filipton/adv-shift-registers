@@ -1,5 +1,7 @@
 #![no_std]
 
+use core::ops::Range;
+
 use embedded_hal::digital::{OutputPin, PinState};
 
 pub struct AdvancedShiftRegister<const N: usize, OP: OutputPin> {
@@ -19,12 +21,18 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
         }
     }
 
-    pub fn get_shifter_mut(&mut self, i: usize) -> *mut u8 {
-        if i >= N {
-            panic!("i too large!");
+    pub fn get_shifter_mut(&mut self, i: usize) -> ShifterValue {
+        ShifterValue {
+            inner: core::ptr::addr_of_mut!(self.shifters[i]),
         }
+    }
 
-        core::ptr::addr_of_mut!(self.shifters[i])
+    pub fn get_shifter_range_mut(&mut self, range: Range<usize>) -> ShifterValueRange {
+        let len = range.len();
+        ShifterValueRange {
+            inner: core::ptr::addr_of_mut!(self.shifters[range]),
+            len,
+        }
     }
 
     pub fn shift_test(&mut self, mut val: u8, latch: bool) {
@@ -59,5 +67,40 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
 
         _ = self.latch_pin.set_high();
         _ = self.latch_pin.set_low();
+    }
+}
+
+#[derive(Clone)]
+pub struct ShifterValue {
+    inner: *mut u8,
+}
+
+impl ShifterValue {
+    pub fn set_value(&self, value: u8) {
+        unsafe {
+            *self.inner = value;
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct ShifterValueRange {
+    inner: *mut [u8],
+    len: usize,
+}
+
+impl ShifterValueRange {
+    pub fn set_data(&self, data: &[u8]) {
+        unsafe {
+            let ptr = &mut *self.inner;
+            ptr.copy_from_slice(data);
+        }
+    }
+
+    pub fn set_value(&self, index: usize, value: u8) {
+        unsafe {
+            let ptr = &mut *self.inner;
+            ptr[index] = value;
+        }
     }
 }
