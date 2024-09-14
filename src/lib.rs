@@ -1,6 +1,6 @@
 #![no_std]
 
-use core::ops::Range;
+use core::{borrow::BorrowMut, ops::Range};
 use embedded_hal::digital::{OutputPin, PinState};
 
 pub struct AdvancedShiftRegister<const N: usize, OP: OutputPin> {
@@ -93,6 +93,10 @@ impl<const N: usize, OP: OutputPin> ShifterValueRange<N, OP> {
         }
     }
 
+    pub fn data<'a>(&self) -> &'a mut [u8] {
+        unsafe { self.inner.as_mut().unwrap() }
+    }
+
     pub fn set_value(&self, index: usize, value: u8) {
         unsafe {
             let ptr = &mut *self.inner;
@@ -100,8 +104,11 @@ impl<const N: usize, OP: OutputPin> ShifterValueRange<N, OP> {
         }
     }
 
-    pub fn value<'a>(&self) -> &'a mut [u8] {
-        unsafe { self.inner.as_mut().unwrap() }
+    pub fn value<'a>(&self, index: usize) -> &'a mut u8 {
+        unsafe {
+            let ptr = &mut *self.inner;
+            ptr[index].borrow_mut()
+        }
     }
 
     pub fn update_shifters(&self) {
