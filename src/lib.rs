@@ -20,18 +20,16 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
         }
     }
 
-    pub fn get_shifter_mut(&mut self, i: usize) -> ShifterValue<N, OP> {
+    pub fn get_shifter_mut(&mut self, i: usize) -> ShifterValue {
         ShifterValue {
             inner: core::ptr::addr_of_mut!(self.shifters[i]),
-            parent: core::ptr::addr_of_mut!(*self),
         }
     }
 
-    pub fn get_shifter_range_mut(&mut self, range: Range<usize>) -> ShifterValueRange<N, OP> {
+    pub fn get_shifter_range_mut(&mut self, range: Range<usize>) -> ShifterValueRange {
         ShifterValueRange {
             //len: range.len(),
             inner: core::ptr::addr_of_mut!(self.shifters[range]),
-            parent: core::ptr::addr_of_mut!(*self),
         }
     }
 
@@ -55,12 +53,11 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
 }
 
 #[derive(Clone)]
-pub struct ShifterValue<const N: usize, OP: OutputPin> {
+pub struct ShifterValue {
     inner: *mut u8,
-    parent: *mut AdvancedShiftRegister<N, OP>,
 }
 
-impl<const N: usize, OP: OutputPin> ShifterValue<N, OP> {
+impl ShifterValue {
     pub fn set_value(&self, value: u8) {
         unsafe {
             *self.inner = value;
@@ -70,22 +67,15 @@ impl<const N: usize, OP: OutputPin> ShifterValue<N, OP> {
     pub fn value<'a>(&self) -> &'a mut u8 {
         unsafe { self.inner.as_mut().unwrap() }
     }
-
-    pub fn update_shifters(&self) {
-        unsafe {
-            (*self.parent).update_shifters();
-        }
-    }
 }
 
 #[derive(Clone)]
-pub struct ShifterValueRange<const N: usize, OP: OutputPin> {
+pub struct ShifterValueRange {
     inner: *mut [u8],
     //len: usize,
-    parent: *mut AdvancedShiftRegister<N, OP>,
 }
 
-impl<const N: usize, OP: OutputPin> ShifterValueRange<N, OP> {
+impl ShifterValueRange {
     pub fn set_data(&self, data: &[u8]) {
         unsafe {
             let ptr = &mut *self.inner;
@@ -108,12 +98,6 @@ impl<const N: usize, OP: OutputPin> ShifterValueRange<N, OP> {
         unsafe {
             let ptr = &mut *self.inner;
             ptr[index].borrow_mut()
-        }
-    }
-
-    pub fn update_shifters(&self) {
-        unsafe {
-            (*self.parent).update_shifters();
         }
     }
 }
