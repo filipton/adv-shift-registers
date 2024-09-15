@@ -1,12 +1,22 @@
 #![no_std]
 
-use core::{borrow::BorrowMut, ops::Range};
-use embedded_hal::digital::{ErrorType, OutputPin, PinState};
+use core::ops::Range;
+use embedded_hal::digital::{OutputPin, PinState};
+use wrappers::{ShifterPin, ShifterValue, ShifterValueRange};
+
+pub mod wrappers;
 
 pub struct AdvancedShiftRegister<const N: usize, OP: OutputPin> {
+    /// Shifter data (currently set bits)
     pub shifters: [u8; N],
+
+    /// Data pin
     data_pin: OP,
+
+    /// Clock pin
     clk_pin: OP,
+
+    /// Latch pin
     latch_pin: OP,
 }
 
@@ -20,33 +30,40 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
         }
     }
 
+    /// Get wrapper for value of one shifter register (for easy modyfing)
     pub fn get_shifter_mut(&mut self, i: usize) -> ShifterValue {
-        ShifterValue {
-            inner: core::ptr::addr_of_mut!(self.shifters[i]),
+        unsafe {
+            ShifterValue {
+                inner: core::ptr::addr_of_mut!(self.shifters[i]),
+                update_shifters_ptr: UpdateShiftersFuncPtr::new(self),
+            }
         }
     }
 
+    /// Get wrapper for one bit of specifed shifter register (with embedded_hal digitalpin trait)
     pub fn get_pin_mut(&mut self, i: usize, bit: u8) -> ShifterPin {
         unsafe {
             ShifterPin {
                 bit,
                 inner: core::ptr::addr_of_mut!(self.shifters[i]),
-                parent: self as *mut _ as *mut (),
-                update_shifters_ptr: core::mem::transmute(
-                    Self::update_shifters_trampoline
-                        as unsafe extern "C" fn(*mut AdvancedShiftRegister<N, OP>),
-                ),
+                update_shifters_ptr: UpdateShiftersFuncPtr::new(self),
             }
         }
     }
 
+    /// Get wrapper for range of shifter registers
+    /// (for easy modyfing of multiple registers at the same time)
     pub fn get_shifter_range_mut(&mut self, range: Range<usize>) -> ShifterValueRange {
-        ShifterValueRange {
-            //len: range.len(),
-            inner: core::ptr::addr_of_mut!(self.shifters[range]),
+        unsafe {
+            ShifterValueRange {
+                //len: range.len(),
+                inner: core::ptr::addr_of_mut!(self.shifters[range]),
+                update_shifters_ptr: UpdateShiftersFuncPtr::new(self),
+            }
         }
     }
 
+    /// Push stored shifters data onto shifter registers
     pub fn update_shifters(&mut self) {
         for i in (0..N).rev() {
             let mut val = self.shifters[i];
@@ -65,119 +82,33 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
         _ = self.latch_pin.set_low();
     }
 
+    /// Trampoline function to execute `.update_shifters()` function outside this struct
+    /// without using any generics
     unsafe extern "C" fn update_shifters_trampoline(this: *mut AdvancedShiftRegister<N, OP>) {
         (&mut *this).update_shifters();
     }
 }
 
 #[derive(Clone)]
-pub struct ShifterValue {
-    inner: *mut u8,
-}
-
-impl ShifterValue {
-    pub fn set_value(&self, value: u8) {
-        unsafe {
-            *self.inner = value;
-        }
-    }
-
-    pub fn value<'a>(&self) -> &'a mut u8 {
-        unsafe { self.inner.as_mut().unwrap() }
-    }
-}
-
-type UpdateShiftersFunc = unsafe extern "C" fn(*mut ());
-#[derive(Clone)]
-pub struct ShifterPin {
-    bit: u8,
-    inner: *mut u8,
-
+struct UpdateShiftersFuncPtr {
     parent: *mut (),
-    update_shifters_ptr: UpdateShiftersFunc,
+    update_shifters_ptr: unsafe extern "C" fn(*mut ()),
 }
 
-impl ShifterPin {
-    /*
-    pub fn test_new(
-        bit: u8,
-        shifter_i: usize,
-        adv_shift_register: &mut AdvancedShiftRegister<N, OP>,
+impl UpdateShiftersFuncPtr {
+    pub unsafe fn new<const N: usize, OP: OutputPin>(
+        parent: &mut AdvancedShiftRegister<N, OP>,
     ) -> Self {
-        unsafe {
-            ShifterPin {
-                bit,
-                inner: core::ptr::addr_of_mut!(adv_shift_register.shifters[shifter_i]),
-                parent: adv_shift_register as *mut _ as *mut (),
-                update_shifters_ptr: core::mem::transmute(
-                    Self::update_shifters_trampoline
-                        as unsafe extern "C" fn(*mut AdvancedShiftRegister<N, OP>),
-                ),
-            }
-        }
-    }
-    */
-
-    fn call_update_shifters(&mut self) {
-        unsafe {
-            (self.update_shifters_ptr)(self.parent);
+        Self {
+            parent: parent as *mut _ as *mut (),
+            update_shifters_ptr: core::mem::transmute(
+                AdvancedShiftRegister::update_shifters_trampoline
+                    as unsafe extern "C" fn(*mut AdvancedShiftRegister<N, OP>),
+            ),
         }
     }
 
-    fn value<'a>(&self) -> &'a mut u8 {
-        unsafe { self.inner.as_mut().unwrap() }
-    }
-}
-
-impl ErrorType for ShifterPin {
-    type Error = embedded_hal::digital::ErrorKind;
-}
-
-impl OutputPin for ShifterPin {
-    fn set_low(&mut self) -> Result<(), Self::Error> {
-        *self.value() &= !(1 << (7 - self.bit));
-        self.call_update_shifters();
-
-        Ok(())
-    }
-
-    fn set_high(&mut self) -> Result<(), Self::Error> {
-        *self.value() |= 1 << (7 - self.bit);
-        self.call_update_shifters();
-
-        Ok(())
-    }
-}
-
-#[derive(Clone)]
-pub struct ShifterValueRange {
-    inner: *mut [u8],
-    //len: usize,
-}
-
-impl ShifterValueRange {
-    pub fn set_data(&self, data: &[u8]) {
-        unsafe {
-            let ptr = &mut *self.inner;
-            ptr.copy_from_slice(data);
-        }
-    }
-
-    pub fn data<'a>(&self) -> &'a mut [u8] {
-        unsafe { self.inner.as_mut().unwrap() }
-    }
-
-    pub fn set_value(&self, index: usize, value: u8) {
-        unsafe {
-            let ptr = &mut *self.inner;
-            ptr[index] = value;
-        }
-    }
-
-    pub fn value<'a>(&self, index: usize) -> &'a mut u8 {
-        unsafe {
-            let ptr = &mut *self.inner;
-            ptr[index].borrow_mut()
-        }
+    pub unsafe fn call_update_shifters(&self) {
+        (self.update_shifters_ptr)(self.parent);
     }
 }
