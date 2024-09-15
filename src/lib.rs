@@ -1,7 +1,7 @@
 #![no_std]
 
 use core::{borrow::BorrowMut, ops::Range};
-use embedded_hal::digital::{OutputPin, PinState};
+use embedded_hal::digital::{ErrorType, OutputPin, PinState};
 
 pub struct AdvancedShiftRegister<const N: usize, OP: OutputPin> {
     pub shifters: [u8; N],
@@ -66,6 +66,55 @@ impl ShifterValue {
 
     pub fn value<'a>(&self) -> &'a mut u8 {
         unsafe { self.inner.as_mut().unwrap() }
+    }
+}
+
+#[derive(Clone)]
+pub struct ShifterPin<const N: usize, OP: OutputPin> {
+    bit: u8,
+    inner: *mut u8,
+    parent: *mut AdvancedShiftRegister<N, OP>,
+}
+
+impl<const N: usize, OP: OutputPin> ShifterPin<N, OP> {
+    pub fn test_new(
+        bit: u8,
+        shifter_i: usize,
+        adv_shift_register: &mut AdvancedShiftRegister<N, OP>,
+    ) -> Self {
+        ShifterPin {
+            bit,
+            inner: core::ptr::addr_of_mut!(adv_shift_register.shifters[shifter_i]),
+            parent: core::ptr::addr_of_mut!(*adv_shift_register),
+        }
+    }
+
+    fn value<'a>(&self) -> &'a mut u8 {
+        unsafe { self.inner.as_mut().unwrap() }
+    }
+}
+
+impl<const N: usize, OP: OutputPin> ErrorType for ShifterPin<N, OP> {
+    type Error = embedded_hal::digital::ErrorKind;
+}
+
+impl<const N: usize, OP: OutputPin> OutputPin for ShifterPin<N, OP> {
+    fn set_low(&mut self) -> Result<(), Self::Error> {
+        *self.value() &= !(1 << (7 - self.bit));
+        unsafe {
+            (*self.parent).update_shifters();
+        }
+
+        Ok(())
+    }
+
+    fn set_high(&mut self) -> Result<(), Self::Error> {
+        *self.value() |= 1 << (7 - self.bit);
+        unsafe {
+            (*self.parent).update_shifters();
+        }
+
+        Ok(())
     }
 }
 
