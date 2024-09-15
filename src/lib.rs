@@ -26,6 +26,20 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
         }
     }
 
+    pub fn get_pin_mut(&mut self, i: usize, bit: u8) -> ShifterPin {
+        unsafe {
+            ShifterPin {
+                bit,
+                inner: core::ptr::addr_of_mut!(self.shifters[i]),
+                parent: self as *mut _ as *mut (),
+                update_shifters_ptr: core::mem::transmute(
+                    Self::update_shifters_trampoline
+                        as unsafe extern "C" fn(*mut AdvancedShiftRegister<N, OP>),
+                ),
+            }
+        }
+    }
+
     pub fn get_shifter_range_mut(&mut self, range: Range<usize>) -> ShifterValueRange {
         ShifterValueRange {
             //len: range.len(),
@@ -50,6 +64,10 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
         _ = self.latch_pin.set_high();
         _ = self.latch_pin.set_low();
     }
+
+    unsafe extern "C" fn update_shifters_trampoline(this: *mut AdvancedShiftRegister<N, OP>) {
+        (&mut *this).update_shifters();
+    }
 }
 
 #[derive(Clone)]
@@ -69,23 +87,40 @@ impl ShifterValue {
     }
 }
 
+type UpdateShiftersFunc = unsafe extern "C" fn(*mut ());
 #[derive(Clone)]
-pub struct ShifterPin<const N: usize, OP: OutputPin> {
+pub struct ShifterPin {
     bit: u8,
     inner: *mut u8,
-    parent: *mut AdvancedShiftRegister<N, OP>,
+
+    parent: *mut (),
+    update_shifters_ptr: UpdateShiftersFunc,
 }
 
-impl<const N: usize, OP: OutputPin> ShifterPin<N, OP> {
+impl ShifterPin {
+    /*
     pub fn test_new(
         bit: u8,
         shifter_i: usize,
         adv_shift_register: &mut AdvancedShiftRegister<N, OP>,
     ) -> Self {
-        ShifterPin {
-            bit,
-            inner: core::ptr::addr_of_mut!(adv_shift_register.shifters[shifter_i]),
-            parent: core::ptr::addr_of_mut!(*adv_shift_register),
+        unsafe {
+            ShifterPin {
+                bit,
+                inner: core::ptr::addr_of_mut!(adv_shift_register.shifters[shifter_i]),
+                parent: adv_shift_register as *mut _ as *mut (),
+                update_shifters_ptr: core::mem::transmute(
+                    Self::update_shifters_trampoline
+                        as unsafe extern "C" fn(*mut AdvancedShiftRegister<N, OP>),
+                ),
+            }
+        }
+    }
+    */
+
+    fn call_update_shifters(&mut self) {
+        unsafe {
+            (self.update_shifters_ptr)(self.parent);
         }
     }
 
@@ -94,25 +129,21 @@ impl<const N: usize, OP: OutputPin> ShifterPin<N, OP> {
     }
 }
 
-impl<const N: usize, OP: OutputPin> ErrorType for ShifterPin<N, OP> {
+impl ErrorType for ShifterPin {
     type Error = embedded_hal::digital::ErrorKind;
 }
 
-impl<const N: usize, OP: OutputPin> OutputPin for ShifterPin<N, OP> {
+impl OutputPin for ShifterPin {
     fn set_low(&mut self) -> Result<(), Self::Error> {
         *self.value() &= !(1 << (7 - self.bit));
-        unsafe {
-            (*self.parent).update_shifters();
-        }
+        self.call_update_shifters();
 
         Ok(())
     }
 
     fn set_high(&mut self) -> Result<(), Self::Error> {
         *self.value() |= 1 << (7 - self.bit);
-        unsafe {
-            (*self.parent).update_shifters();
-        }
+        self.call_update_shifters();
 
         Ok(())
     }
