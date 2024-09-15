@@ -41,10 +41,11 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
     }
 
     /// Get wrapper for one bit of specifed shifter register (with embedded_hal digitalpin trait)
-    pub fn get_pin_mut(&mut self, i: usize, bit: u8) -> ShifterPin {
+    pub fn get_pin_mut(&mut self, i: usize, bit: u8, auto_shift: bool) -> ShifterPin {
         unsafe {
             ShifterPin {
                 bit,
+                auto_update: auto_shift,
                 inner: core::ptr::addr_of_mut!(self.shifters[i]),
                 update_shifters_ptr: UpdateShiftersFuncPtr::new(self),
             }

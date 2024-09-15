@@ -38,6 +38,9 @@ pub struct ShifterPin {
     /// Bit index to modify
     pub(crate) bit: u8,
 
+    /// If after change should auto shift
+    pub(crate) auto_update: bool,
+
     /// Inner mutable byte value reference
     pub(crate) inner: *mut u8,
 
@@ -53,7 +56,10 @@ impl embedded_hal::digital::OutputPin for ShifterPin {
     fn set_low(&mut self) -> Result<(), Self::Error> {
         unsafe {
             *self.inner &= !(1 << (7 - self.bit));
-            self.update_shifters_ptr.call_update_shifters();
+
+            if self.auto_update {
+                self.update_shifters_ptr.call_update_shifters();
+            }
         }
 
         Ok(())
@@ -62,7 +68,10 @@ impl embedded_hal::digital::OutputPin for ShifterPin {
     fn set_high(&mut self) -> Result<(), Self::Error> {
         unsafe {
             *self.inner |= 1 << (7 - self.bit);
-            self.update_shifters_ptr.call_update_shifters();
+
+            if self.auto_update {
+                self.update_shifters_ptr.call_update_shifters();
+            }
         }
 
         Ok(())
