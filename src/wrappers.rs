@@ -1,6 +1,5 @@
-use core::borrow::BorrowMut;
-
 use crate::UpdateShiftersFuncPtr;
+use core::borrow::BorrowMut;
 
 #[derive(Clone)]
 pub struct ShifterValue {
@@ -30,6 +29,16 @@ impl ShifterValue {
     pub fn update_shifters(&self) {
         unsafe {
             self.update_shifters_ptr.call_update_shifters();
+        }
+    }
+
+    /// Get wrapper for one bit of shifter register (with embedded_hal digitalpin trait)
+    pub fn get_pin_mut(&self, bit: u8, auto_shift: bool) -> ShifterPin {
+        ShifterPin {
+            bit,
+            auto_update: auto_shift,
+            inner: self.inner,
+            update_shifters_ptr: self.update_shifters_ptr.clone(),
         }
     }
 }
