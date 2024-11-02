@@ -20,9 +20,14 @@ impl ShifterValue {
     }
 
     /// Get mutable reference to inner value (for easy bitwise operations)
-    /// This function doesn't call `.update_shifters()`
-    pub fn value<'a>(&self) -> &'a mut u8 {
-        unsafe { self.inner.as_mut().unwrap() }
+    /// This function returns guard to value, automatically updates shifters after change
+    pub fn value<'a>(&self) -> ShifterGuard<'a, u8> {
+        unsafe {
+            ShifterGuard {
+                inner: self.inner.as_mut().unwrap(),
+                update_shifters_ptr: self.update_shifters_ptr.clone(),
+            }
+        }
     }
 
     /// Push stored shifters data onto shifter registers
@@ -110,12 +115,17 @@ impl ShifterValueRange {
     }
 
     /// Get mutable reference to inner array (for easy bitwise operations)
-    /// This function doesn't call `.update_shifters()`
-    pub fn data<'a>(&self) -> &'a mut [u8] {
-        unsafe { self.inner.as_mut().unwrap() }
+    /// This function returns guard to value, automatically updates shifters after change
+    pub fn data<'a>(&self) -> ShifterGuard<'a, [u8]> {
+        unsafe {
+            ShifterGuard {
+                inner: &mut *self.inner,
+                update_shifters_ptr: self.update_shifters_ptr.clone(),
+            }
+        }
     }
 
-    /// Set data of selected shifter and update calls `.update_shifters()`
+    /// Set data of selected shifter and calls `.update_shifters()`
     pub fn set_value(&self, index: usize, value: u8) {
         unsafe {
             let ptr = &mut *self.inner;
@@ -125,11 +135,15 @@ impl ShifterValueRange {
     }
 
     /// Get mutable reference to inner value of selected shifter (for easy bitwise operations)
-    /// This function doesn't call `.update_shifters()`
-    pub fn value<'a>(&self, index: usize) -> &'a mut u8 {
+    /// This function returns guard to value, automatically updates shifters after change
+    pub fn value<'a>(&self, index: usize) -> ShifterGuard<'a, u8> {
         unsafe {
             let ptr = &mut *self.inner;
-            ptr[index].borrow_mut()
+
+            ShifterGuard {
+                inner: ptr[index].borrow_mut(),
+                update_shifters_ptr: self.update_shifters_ptr.clone(),
+            }
         }
     }
 
@@ -138,5 +152,31 @@ impl ShifterValueRange {
         unsafe {
             self.update_shifters_ptr.call_update_shifters();
         }
+    }
+}
+
+pub struct ShifterGuard<'a, T: ?Sized> {
+    inner: &'a mut T,
+    update_shifters_ptr: UpdateShiftersFuncPtr,
+}
+
+impl<'a, T: ?Sized> Drop for ShifterGuard<'a, T> {
+    fn drop(&mut self) {
+        unsafe {
+            self.update_shifters_ptr.call_update_shifters();
+        }
+    }
+}
+
+impl<'a, T: ?Sized> core::ops::Deref for ShifterGuard<'a, T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        self.inner
+    }
+}
+
+impl<'a, T: ?Sized> core::ops::DerefMut for ShifterGuard<'a, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner
     }
 }
