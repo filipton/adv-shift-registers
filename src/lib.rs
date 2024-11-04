@@ -32,15 +32,9 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
 
     /// Get wrapper for value of one shifter register (for easy modyfing)
     pub fn get_shifter_mut(&mut self, i: usize) -> ShifterValue {
-        unsafe {
-            let mut d = || self.update_shifters();
-            let d = core::ptr::addr_of_mut!(d) as *mut fn();
-            (*d)();
-
-            ShifterValue {
-                inner: core::ptr::addr_of_mut!(self.shifters[i]),
-                update_shifters_ptr: MutFuncPtr::new(self, Self::update_shifters_trampoline),
-            }
+        ShifterValue {
+            inner: core::ptr::addr_of_mut!(self.shifters[i]),
+            update_shifters_ptr: MutFuncPtr::new(self, Self::update_shifters_trampoline),
         }
     }
 
