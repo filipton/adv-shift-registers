@@ -1,4 +1,4 @@
-use crate::UpdateShiftersFuncPtr;
+use crate::MutFuncPtr;
 use core::borrow::BorrowMut;
 
 #[derive(Clone)]
@@ -7,7 +7,7 @@ pub struct ShifterValue {
     pub(crate) inner: *mut u8,
 
     /// Pointer to `.update_shifters()` function of AdvancedShiftRegister
-    pub(crate) update_shifters_ptr: UpdateShiftersFuncPtr,
+    pub(crate) update_shifters_ptr: MutFuncPtr,
 }
 
 impl ShifterValue {
@@ -15,7 +15,7 @@ impl ShifterValue {
     pub fn set_value(&self, value: u8) {
         unsafe {
             *self.inner = value;
-            self.update_shifters_ptr.call_update_shifters();
+            self.update_shifters_ptr.call();
         }
     }
 
@@ -33,7 +33,7 @@ impl ShifterValue {
     /// Push stored shifters data onto shifter registers
     pub fn update_shifters(&self) {
         unsafe {
-            self.update_shifters_ptr.call_update_shifters();
+            self.update_shifters_ptr.call();
         }
     }
 
@@ -59,7 +59,7 @@ pub struct ShifterPin {
     pub(crate) inner: *mut u8,
 
     /// Pointer to `.update_shifters()` function of AdvancedShiftRegister
-    pub(crate) update_shifters_ptr: UpdateShiftersFuncPtr,
+    pub(crate) update_shifters_ptr: MutFuncPtr,
 }
 
 impl embedded_hal::digital::ErrorType for ShifterPin {
@@ -72,7 +72,7 @@ impl embedded_hal::digital::OutputPin for ShifterPin {
             *self.inner &= !(1 << (7 - self.bit));
 
             if self.auto_update {
-                self.update_shifters_ptr.call_update_shifters();
+                self.update_shifters_ptr.call();
             }
         }
 
@@ -84,7 +84,7 @@ impl embedded_hal::digital::OutputPin for ShifterPin {
             *self.inner |= 1 << (7 - self.bit);
 
             if self.auto_update {
-                self.update_shifters_ptr.call_update_shifters();
+                self.update_shifters_ptr.call();
             }
         }
 
@@ -101,7 +101,7 @@ pub struct ShifterValueRange {
     //pub(crate) len: usize,
 
     /// Pointer to `.update_shifters()` function of AdvancedShiftRegister
-    pub(crate) update_shifters_ptr: UpdateShiftersFuncPtr,
+    pub(crate) update_shifters_ptr: MutFuncPtr,
 }
 
 impl ShifterValueRange {
@@ -110,7 +110,7 @@ impl ShifterValueRange {
         unsafe {
             let ptr = &mut *self.inner;
             ptr.copy_from_slice(data);
-            self.update_shifters_ptr.call_update_shifters();
+            self.update_shifters_ptr.call();
         }
     }
 
@@ -130,7 +130,7 @@ impl ShifterValueRange {
         unsafe {
             let ptr = &mut *self.inner;
             ptr[index] = value;
-            self.update_shifters_ptr.call_update_shifters();
+            self.update_shifters_ptr.call();
         }
     }
 
@@ -150,20 +150,20 @@ impl ShifterValueRange {
     /// Push stored shifters data onto shifter registers
     pub fn update_shifters(&self) {
         unsafe {
-            self.update_shifters_ptr.call_update_shifters();
+            self.update_shifters_ptr.call();
         }
     }
 }
 
 pub struct ShifterGuard<'a, T: ?Sized> {
     inner: &'a mut T,
-    update_shifters_ptr: UpdateShiftersFuncPtr,
+    update_shifters_ptr: MutFuncPtr,
 }
 
 impl<'a, T: ?Sized> Drop for ShifterGuard<'a, T> {
     fn drop(&mut self) {
         unsafe {
-            self.update_shifters_ptr.call_update_shifters();
+            self.update_shifters_ptr.call();
         }
     }
 }

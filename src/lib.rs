@@ -33,34 +33,34 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
     /// Get wrapper for value of one shifter register (for easy modyfing)
     pub fn get_shifter_mut(&mut self, i: usize) -> ShifterValue {
         unsafe {
+            let mut d = || self.update_shifters();
+            let d = core::ptr::addr_of_mut!(d) as *mut fn();
+            (*d)();
+
             ShifterValue {
                 inner: core::ptr::addr_of_mut!(self.shifters[i]),
-                update_shifters_ptr: UpdateShiftersFuncPtr::new(self),
+                update_shifters_ptr: MutFuncPtr::new(self, Self::update_shifters_trampoline),
             }
         }
     }
 
     /// Get wrapper for one bit of specifed shifter register (with embedded_hal digitalpin trait)
     pub fn get_pin_mut(&mut self, i: usize, bit: u8, auto_shift: bool) -> ShifterPin {
-        unsafe {
-            ShifterPin {
-                bit,
-                auto_update: auto_shift,
-                inner: core::ptr::addr_of_mut!(self.shifters[i]),
-                update_shifters_ptr: UpdateShiftersFuncPtr::new(self),
-            }
+        ShifterPin {
+            bit,
+            auto_update: auto_shift,
+            inner: core::ptr::addr_of_mut!(self.shifters[i]),
+            update_shifters_ptr: MutFuncPtr::new(self, Self::update_shifters_trampoline),
         }
     }
 
     /// Get wrapper for range of shifter registers
     /// (for easy modyfing of multiple registers at the same time)
     pub fn get_shifter_range_mut(&mut self, range: Range<usize>) -> ShifterValueRange {
-        unsafe {
-            ShifterValueRange {
-                //len: range.len(),
-                inner: core::ptr::addr_of_mut!(self.shifters[range]),
-                update_shifters_ptr: UpdateShiftersFuncPtr::new(self),
-            }
+        ShifterValueRange {
+            //len: range.len(),
+            inner: core::ptr::addr_of_mut!(self.shifters[range]),
+            update_shifters_ptr: MutFuncPtr::new(self, Self::update_shifters_trampoline),
         }
     }
 
@@ -85,31 +85,28 @@ impl<const N: usize, OP: OutputPin> AdvancedShiftRegister<N, OP> {
 
     /// Trampoline function to execute `.update_shifters()` function outside this struct
     /// without using any generics
-    unsafe extern "C" fn update_shifters_trampoline(this: *mut AdvancedShiftRegister<N, OP>) {
+    unsafe extern "C" fn update_shifters_trampoline(this: *mut Self) {
         (&mut *this).update_shifters();
     }
 }
 
 #[derive(Clone)]
-struct UpdateShiftersFuncPtr {
+struct MutFuncPtr {
     parent: *mut (),
-    update_shifters_ptr: unsafe extern "C" fn(*mut ()),
+    call_ptr: unsafe extern "C" fn(*mut ()),
 }
 
-impl UpdateShiftersFuncPtr {
-    pub unsafe fn new<const N: usize, OP: OutputPin>(
-        parent: &mut AdvancedShiftRegister<N, OP>,
-    ) -> Self {
-        Self {
-            parent: parent as *mut _ as *mut (),
-            update_shifters_ptr: core::mem::transmute(
-                AdvancedShiftRegister::update_shifters_trampoline
-                    as unsafe extern "C" fn(*mut AdvancedShiftRegister<N, OP>),
-            ),
+impl MutFuncPtr {
+    pub fn new<N>(parent: &mut N, function: unsafe extern "C" fn(*mut N)) -> Self {
+        unsafe {
+            Self {
+                parent: parent as *mut _ as *mut (),
+                call_ptr: core::mem::transmute(function),
+            }
         }
     }
 
-    pub unsafe fn call_update_shifters(&self) {
-        (self.update_shifters_ptr)(self.parent);
+    pub unsafe fn call(&self) {
+        (self.call_ptr)(self.parent);
     }
 }
