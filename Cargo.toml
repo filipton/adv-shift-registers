@@ -1,7 +1,7 @@
 [package]
 name = "adv-shift-registers"
 authors = ["filipton <filipton12@gmail.com>"]
-version = "0.2.4"
+version = "0.2.5"
 edition = "2021"
 license = "MIT"
 description = "Advanced shift registers control (for multiple chained shift-registers)"
@@ -11,4 +11,4 @@ repository = "https://github.com/filipton/adv-shift-registers"
 
 [dependencies]
 embedded-hal = "1.0.0"
-log = "0.4.22"
+log = "0.4.25"

@@ -19,6 +19,13 @@ impl ShifterValue {
         }
     }
 
+    /// Set value of shifter register without updating it
+    pub fn set_value_raw(&self, value: u8) {
+        unsafe {
+            *self.inner = value;
+        }
+    }
+
     /// Get mutable reference to inner value (for easy bitwise operations)
     /// This function returns guard to value, automatically updates shifters after change
     pub fn value<'a>(&self) -> ShifterGuard<'a, u8> {
@@ -111,6 +118,14 @@ impl ShifterValueRange {
             let ptr = &mut *self.inner;
             ptr.copy_from_slice(data);
             self.update_shifters_ptr.call();
+        }
+    }
+
+    /// Set data of shifters without updating them
+    pub fn set_data_raw(&self, data: &[u8]) {
+        unsafe {
+            let ptr = &mut *self.inner;
+            ptr.copy_from_slice(data);
         }
     }
 
